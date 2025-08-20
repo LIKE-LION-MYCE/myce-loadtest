@@ -1,0 +1,63 @@
+# SSH 키 파일들
+keys/*
+!keys/.gitkeep
+
+# 로그 파일들
+*.log
+
+# 테스트 결과 파일들 (로컬 백업용)
+results/
+*.json
+
+# macOS 시스템 파일
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows 시스템 파일
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# 에디터 임시 파일
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.history/
+.ionide/
+
+# 임시 파일들
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+.cache/
