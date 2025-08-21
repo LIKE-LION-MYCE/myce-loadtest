@@ -1,0 +1,17 @@
+# AWS Load Balancer Controller Target Group Binding
+# This connects EKS pods to the existing hybrid ALB target group
+# The controller automatically registers/deregisters pod IPs
+
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: myce-hybrid-tgb
+  namespace: default
+  labels:
+    app: myce-server
+spec:
+  serviceRef:
+    name: myce-service
+    port: 8080
+  targetGroupARN: arn:aws:elasticloadbalancing:ap-northeast-2:155669502936:targetgroup/myce-hybrid-backends/a91c39e412ddeca8
+  targetType: ip

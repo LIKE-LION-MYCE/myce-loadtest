@@ -1,0 +1,81 @@
+# Horizontal Pod Autoscaler for MYCE Server
+# Scales pods based on CPU usage for load testing demos
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: myce-server-hpa
+  labels:
+    app: myce-server
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: myce-server
+  minReplicas: 3    # Always keep 3 pods running (pre-warmed)
+  maxReplicas: 18   # Scale up to 18 pods (6 nodes × 3 pods/node max)
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70  # Scale when CPU > 70%
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80  # Scale when memory > 80%
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60  # Wait 60s before scaling up
+      policies:
+      - type: Percent
+        value: 100  # Double the pods when scaling up
+        periodSeconds: 60
+      - type: Pods  
+        value: 2    # Or add 2 pods minimum
+        periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 50   # Remove 50% of pods when scaling down
+        periodSeconds: 60
+---
+# Alternative HPA for spike testing (higher scaling rate)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: myce-server-hpa-spike
+  labels:
+    app: myce-server
+    profile: spike-test
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: myce-server
+  minReplicas: 3
+  maxReplicas: 18
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50  # More aggressive scaling
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30  # Faster scaling
+      policies:
+      - type: Percent
+        value: 200  # Triple the pods quickly
+        periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 600  # Slower scale down for spike recovery
+      policies:
+      - type: Percent  
+        value: 25
+        periodSeconds: 60

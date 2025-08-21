@@ -1,0 +1,82 @@
+# Prometheus Kubernetes Service Discovery Configuration
+# Add this job to your external prometheus.yml configuration
+
+scrape_configs:
+  # Existing Docker container scraping
+  - job_name: 'myce-docker-backend'
+    static_configs:
+      - targets: ['10.0.1.249:8080']
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ['10.0.1.249:8080']
+        labels:
+          instance_type: 'docker'
+          deployment: 'ec2-docker'
+
+  # Auto-discovery of EKS pods
+  - job_name: 'myce-eks-pods'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [default]
+        # Update this path to your kubeconfig file location
+        kubeconfig_file: '/home/ubuntu/.kube/config'  # Update this path!
+    relabel_configs:
+      # Only scrape pods with app=myce-server label
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: myce-server
+      
+      # Only scrape pods with prometheus.io/scrape=true annotation
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      
+      # Use custom metrics path from annotation
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+        
+      # Use custom port from annotation  
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      
+      # Add Kubernetes labels as Prometheus labels
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+        
+      # Add namespace info
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+        
+      # Add pod name info  
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+        
+      # Add instance type label
+      - target_label: instance_type
+        replacement: 'eks-pod'
+        
+      # Add deployment info
+      - target_label: deployment  
+        replacement: 'eks-kubernetes'
+
+# Alternative: If you prefer static config for testing, use this:
+# scrape_configs:
+#   - job_name: 'myce-hybrid-all'
+#     static_configs:
+#       - targets: 
+#         - '10.0.1.249:8080'    # Docker container
+#         - '10.0.2.124:8080'    # EKS pod 1  
+#         - '10.0.2.186:8080'    # EKS pod 2
+#         - '10.0.3.18:8080'     # EKS pod 3
+#     metrics_path: /actuator/prometheus
+#     scrape_interval: 15s

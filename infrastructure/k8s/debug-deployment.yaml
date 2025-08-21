@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: debug-ssm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: debug-ssm
+  template:
+    metadata:
+      labels:
+        app: debug-ssm
+    spec:
+      serviceAccountName: myce-service-account
+      containers:
+      - name: debug
+        image: amazon/aws-cli:latest
+        command: ["sleep", "3600"]
+        env:
+        - name: AWS_REGION
+          value: "ap-northeast-2"

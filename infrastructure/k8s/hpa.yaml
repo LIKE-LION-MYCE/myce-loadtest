@@ -1,0 +1,85 @@
+# Horizontal Pod Autoscaler for MYCE Demo
+# Aggressive scaling for dramatic demonstration
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: myce-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: myce-server
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50  # Scale when CPU > 50%
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 70  # Scale when Memory > 70%
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 10  # Very fast scaling for demo
+      policies:
+      - type: Pods
+        value: 2
+        periodSeconds: 30  # Add 2 pods every 30 seconds
+      - type: Percent
+        value: 100
+        periodSeconds: 30  # Or double the pods every 30 seconds
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 60  # Wait 1 minute before scaling down
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 60  # Remove 1 pod every minute
+      selectPolicy: Min
+
+---
+# Alternative HPA for Friday's Spike Demo (more aggressive)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: myce-hpa-spike
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: myce-server
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 40  # Lower threshold for instant scaling
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0   # INSTANT scaling for spike demo!
+      policies:
+      - type: Pods
+        value: 5
+        periodSeconds: 15  # Add 5 pods every 15 seconds
+      - type: Percent
+        value: 200
+        periodSeconds: 15  # Or triple pods every 15 seconds
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 120  # Wait 2 minutes before scaling down
+      policies:
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Min

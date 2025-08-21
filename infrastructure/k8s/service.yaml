@@ -1,0 +1,41 @@
+# MYCE EKS Service - Integrates with existing ALB
+# Uses NodePort to integrate with existing ALB target group
+apiVersion: v1
+kind: Service
+metadata:
+  name: myce-service
+  namespace: default
+  labels:
+    app: myce-server
+    purpose: extends-existing-ec2
+spec:
+  type: NodePort  # NodePort for ALB integration
+  selector:
+    app: myce-server
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+    nodePort: 30080  # Fixed NodePort for ALB target group
+  sessionAffinity: None
+
+---
+# Alternative: ClusterIP service for internal communication
+apiVersion: v1
+kind: Service  
+metadata:
+  name: myce-service-internal
+  namespace: default
+  labels:
+    app: myce-server
+    purpose: internal
+spec:
+  type: ClusterIP
+  selector:
+    app: myce-server
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http

@@ -10,6 +10,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # k6 서버 설정
@@ -43,6 +44,10 @@ print_warning() {
 
 print_error() {
     echo -e "${RED}❌ $1${NC}"
+}
+
+print_info() {
+    echo -e "${BLUE}ℹ️  $1${NC}"
 }
 
 # SSH 키 확인
@@ -133,6 +138,114 @@ view_results() {
     ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$SSH_USER@$K6_SERVER" "cd /home/ubuntu/k6-results && ls -lt *.json 2>/dev/null | head -5 && echo && echo '📈 최신 결과:' && ls -lt *summary.json 2>/dev/null | head -1 | awk '{print \$NF}' | xargs cat 2>/dev/null | jq '.metrics.http_req_duration, .metrics.http_req_failed, .metrics.checks' 2>/dev/null || echo '결과 파일을 찾을 수 없습니다.'"
 }
 
+# EKS 클러스터 시작
+start_eks_cluster() {
+    echo
+    echo -e "${CYAN}🚀 EKS 클러스터 시작${NC}"
+    echo "================================"
+    
+    # 확인 프롬프트
+    echo -e "${YELLOW}⚠️  EKS + Docker 하이브리드 환경을 시작합니다.${NC}"
+    echo "비용: ~$6.36/일 (EKS: $2.40 + 노드: $2.88 + NAT: $1.08)"
+    echo "예상 소요 시간: 8-12분 (NAT Gateway + 3-노드 EKS)"
+    echo
+    read -p "계속하시겠습니까? (yes/no): " -r
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        print_info "작업이 취소되었습니다."
+        return
+    fi
+    
+    # Deploy script 실행
+    INFRA_DIR="$SCRIPT_DIR/infrastructure/scripts"
+    if [ ! -f "$INFRA_DIR/deploy.sh" ]; then
+        print_error "배포 스크립트를 찾을 수 없습니다: $INFRA_DIR/deploy.sh"
+        return
+    fi
+    
+    print_info "EKS 클러스터 배포 중... (약 10-15분 소요)"
+    cd "$INFRA_DIR"
+    ./deploy.sh
+    
+    echo
+    print_status "EKS 클러스터가 준비되었습니다!"
+    echo -e "${GREEN}이제 옵션 11 또는 12로 로드 테스트를 실행할 수 있습니다!${NC}"
+    echo
+    read -p "계속하려면 Enter를 누르세요..."
+}
+
+# EKS 파드 상태 확인
+check_eks_status() {
+    echo
+    echo -e "${CYAN}📊 EKS 파드 상태 확인${NC}"
+    echo "================================"
+    
+    # kubectl이 설치되어 있는지 확인
+    if ! command -v kubectl &> /dev/null; then
+        print_error "kubectl이 설치되지 않았습니다."
+        echo "kubectl을 설치하거나 AWS CloudShell을 사용하세요."
+        return
+    fi
+    
+    # kubeconfig 업데이트
+    print_info "kubeconfig 업데이트 중..."
+    aws eks --region ap-northeast-2 update-kubeconfig --name myce-demo-eks --profile likelion-terraform-current 2>/dev/null || {
+        print_warning "EKS 클러스터가 실행 중이 아닐 수 있습니다."
+        echo "먼저 옵션 13으로 클러스터를 시작하세요."
+        return
+    }
+    
+    echo
+    echo "📋 노드 상태:"
+    kubectl get nodes -o wide
+    echo
+    echo "🚀 파드 상태:"
+    kubectl get pods -o wide
+    echo
+    echo "⚖️  HPA 상태:"
+    kubectl get hpa
+    echo
+    echo "🌐 서비스 상태:"
+    kubectl get services
+    echo
+    echo -e "${GREEN}💡 실시간 파드 모니터링: kubectl get pods -w${NC}"
+    echo
+    read -p "계속하려면 Enter를 누르세요..."
+}
+
+# EKS 클러스터 종료
+destroy_eks_cluster() {
+    echo
+    echo -e "${RED}💸 EKS 클러스터 종료${NC}"
+    echo "================================"
+    
+    # 확인 프롬프트
+    echo -e "${RED}⚠️  경고: EKS 클러스터를 완전히 삭제합니다!${NC}"
+    echo "이 작업은 되돌릴 수 없습니다."
+    echo
+    read -p "정말로 삭제하시겠습니까? (yes/no): " -r
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        print_info "작업이 취소되었습니다."
+        return
+    fi
+    
+    # Cleanup script 실행
+    INFRA_DIR="$SCRIPT_DIR/infrastructure/scripts"
+    if [ ! -f "$INFRA_DIR/cleanup.sh" ]; then
+        print_error "정리 스크립트를 찾을 수 없습니다: $INFRA_DIR/cleanup.sh"
+        return
+    fi
+    
+    print_info "EKS 클러스터 삭제 중... (약 10-15분 소요)"
+    cd "$INFRA_DIR"
+    ./cleanup.sh
+    
+    echo
+    print_status "EKS 클러스터가 삭제되었습니다!"
+    echo -e "${GREEN}💰 과금이 중단되었습니다!${NC}"
+    echo
+    read -p "계속하려면 Enter를 누르세요..."
+}
+
 # 메인 메뉴
 show_menu() {
     while true; do
@@ -170,13 +283,33 @@ show_menu() {
         echo "   └─ 패턴: /actuator/health 단일 엔드포인트, 최소 대기시간(0.1초)"
         echo "   └─ 임계값: 실패율<30%, 90%<3초"
         echo
-        echo -e "${BLUE}=== 도구 ===${NC}"
-        echo "7. 📊 실시간 대시보드 열기"
-        echo "8. 📈 최근 테스트 결과 보기"
-        echo "9. 🚨 긴급 중단 (모든 테스트 강제 종료)"
-        echo "10. ❌ 종료"
+        echo -e "${PURPLE}=== 🚀 EKS 오토스케일링 데모 (JWT 인증 강화) ===${NC}"
+        echo "11. 📈 EKS 점진적 데모 - JWT 인증 포함 (7분)"
+        echo "   └─ VU: 20→100→300→500→800→100 점진적 | 시간: 7분"
+        echo "   └─ 🔐 JWT 인증: 70% 인증 사용자 (test123/test123!!) + 30% 공개 접근"
+        echo "   └─ 패턴: 프로필 조회, 박람회 목록, 즐겨찾기, 알림 등 실제 API 호출"
+        echo "   └─ 파드 확장: 3→6→12→18개 자동 스케일링"
+        echo "   └─ 📊 강화된 대시보드에서 실시간 모니터링!"
         echo
-        read -p "선택하세요 (1-10): " choice
+        echo -e "${RED}12. 💥 EKS 스파이크 데모 - 극한 부하 테스트${NC}"
+        echo "   └─ VU: 50→2000 사용자 10초만에 급증! (40배 스파이크)"
+        echo "   └─ 🔐 JWT 인증: 90% 인증 사용자로 최대 부하 생성"
+        echo "   └─ 패턴: 스파이크 중 핵심 엔드포인트 집중 공격"
+        echo "   └─ 파드 확장: 3→18개 2분 내 폭발적 확장"
+        echo "   └─ 📈 인프라 복원력 검증 (120,000 req/min 피크)"
+        echo
+        echo -e "${CYAN}=== 🛠️ EKS 인프라 관리 ===${NC}"
+        echo "13. 🚀 EKS 클러스터 시작 (15분 소요)"
+        echo "14. 📊 EKS 파드 상태 확인"
+        echo "15. 💸 EKS 클러스터 종료 (비용 절약!)"
+        echo
+        echo -e "${BLUE}=== 도구 ===${NC}"
+        echo "16. 📊 실시간 대시보드 열기"
+        echo "17. 📈 최근 테스트 결과 보기"
+        echo "18. 🚨 긴급 중단 (모든 테스트 강제 종료)"
+        echo "19. ❌ 종료"
+        echo
+        read -p "선택하세요 (1-19): " choice
         
         case $choice in
             1)
@@ -197,24 +330,39 @@ show_menu() {
             6)
                 run_test "spike-test.js" "Basic 스파이크 테스트 (헬스체크)"
                 ;;
-            7)
+            11)
+                run_test "ramp-eks-demo.js" "EKS 점진적 데모 (파드 오토스케일링)"
+                ;;
+            12)
+                run_test "spike-eks-demo.js" "EKS 스파이크 데모 (금요일 특별!)"
+                ;;
+            13)
+                start_eks_cluster
+                ;;
+            14)
+                check_eks_status
+                ;;
+            15)
+                destroy_eks_cluster
+                ;;
+            16)
                 echo -e "${PURPLE}📊 브라우저에서 다음 URL을 열어주세요:${NC}"
                 echo "   https://api.myce.live/dashboard/demo"
                 echo
                 read -p "계속하려면 Enter를 누르세요..."
                 ;;
-            8)
+            17)
                 view_results
                 ;;
-            9)
+            18)
                 emergency_stop
                 ;;
-            10)
+            19)
                 echo -e "${GREEN}테스트 도구를 종료합니다.${NC}"
                 exit 0
                 ;;
             *)
-                print_warning "올바른 번호를 선택해주세요 (1-10)."
+                print_warning "올바른 번호를 선택해주세요 (1-19)."
                 ;;
         esac
     done

@@ -1,0 +1,81 @@
+# MYCE EKS Deployment - Extends existing EC2 backend
+# Uses same Docker image, environment, and SSM parameters as EC2
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myce-server
+  namespace: default
+  labels:
+    app: myce-server
+    version: eks-demo
+    purpose: extends-existing-ec2
+spec:
+  replicas: 1  # Start with 1, HPA will scale up
+  selector:
+    matchLabels:
+      app: myce-server
+  template:
+    metadata:
+      labels:
+        app: myce-server
+        purpose: extends-existing-ec2
+    spec:
+      serviceAccountName: myce-service-account
+      containers:
+      - name: myce-server
+        image: juanpark/myce-backend:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        # Same profile as EC2 version
+        - name: PROFILE
+          value: "product"
+        # AWS region for SSM parameter access
+        - name: AWS_REGION
+          value: "ap-northeast-2"
+        # Let container fetch all secrets from SSM like EC2 does
+        # This mimics startup.sh behavior in Kubernetes
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"      # Low CPU for quick auto-scaling demo
+          limits:
+            memory: "1Gi"
+            cpu: "500m"      # Low limit = faster scaling trigger
+        # Health probes (optional - your app already has these endpoints)
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 120  # Allow time for SSM parameter loading
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 60   # Allow time for startup
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 20  # Allow 5+ minutes for startup + SSM loading
+      restartPolicy: Always
+
+---
+# Service Account with IAM permissions for SSM access
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: myce-service-account
+  namespace: default
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::155669502936:role/myce-eks-pod-role

@@ -61,3 +61,24 @@ $RECYCLE.BIN/
 *.backup
 *.old
 .cache/
+
+# Terraform 상태 파일 (보안상 중요!)
+infrastructure/terraform/*.tfstate
+infrastructure/terraform/*.tfstate.*
+infrastructure/terraform/.terraform/
+infrastructure/terraform/.terraform.lock.hcl
+infrastructure/terraform/terraform.tfvars
+infrastructure/terraform/*.auto.tfvars
+
+# Terraform 다운로드된 프로바이더 바이너리 (용량 큼)
+infrastructure/terraform/.terraform/providers/
+**/terraform-provider-*
+
+# K8s 민감한 설정 파일  
+infrastructure/k8s/*-secret.yaml
+infrastructure/k8s/*-credentials.yaml
+
+# 로드테스트 결과 및 메트릭
+test-results/
+metrics/
+reports/

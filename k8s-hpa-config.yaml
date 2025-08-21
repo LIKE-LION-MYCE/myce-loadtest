@@ -1,0 +1,66 @@
+# Horizontal Pod Autoscaler for MYCE Server
+# This configuration enables automatic scaling based on real-world best practices
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: myce-server-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: myce-server
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  # Primary: Scale on CPU usage (relative to requests)
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 30  # Scale up when CPU > 30% of request (75m/250m)
+  # Secondary: Scale on memory usage (relative to requests)
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 60  # Scale up when memory > 60% of request (600Mi/1Gi)
+  # Aggressive scale-up behavior for spikes
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0  # Scale immediately
+      policies:
+      - type: Percent
+        value: 100  # Double the pods
+        periodSeconds: 30
+      - type: Pods
+        value: 4  # Or add 4 pods
+        periodSeconds: 30
+      selectPolicy: Max  # Choose the larger scaling
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 min before scaling down
+      policies:
+      - type: Percent
+        value: 50  # Remove 50% of pods
+        periodSeconds: 60
+      - type: Pods
+        value: 1  # Or remove 1 pod
+        periodSeconds: 60
+      selectPolicy: Min  # Choose the smaller scaling
+---
+# Service Monitor for custom metrics (optional but recommended)
+apiVersion: v1
+kind: Service
+metadata:
+  name: myce-server-metrics
+  labels:
+    app: myce-server
+spec:
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+  selector:
+    app: myce-server

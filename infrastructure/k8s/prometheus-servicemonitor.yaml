@@ -1,0 +1,60 @@
+# ServiceMonitor for Prometheus to auto-discover MYCE pods
+# This enables automatic scraping of pod metrics as pods scale up/down
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: myce-server-monitor
+  namespace: default
+  labels:
+    app: myce-server
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: myce-server
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
+    interval: 15s
+    scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+    - default
+
+---
+# Alternative: Kubernetes SD config for external Prometheus
+# If ServiceMonitor doesn't work, use this configuration in prometheus.yml
+
+# Add this job to your external prometheus.yml:
+# - job_name: 'myce-eks-pods'
+#   kubernetes_sd_configs:
+#   - role: pod
+#     namespaces:
+#       names:
+#       - default
+#     kubeconfig_file: '/path/to/kubeconfig'
+#   relabel_configs:
+#   - source_labels: [__meta_kubernetes_pod_label_app]
+#     action: keep
+#     regex: myce-server
+#   - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+#     action: keep
+#     regex: true
+#   - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+#     action: replace
+#     target_label: __metrics_path__
+#     regex: (.+)
+#   - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+#     action: replace
+#     regex: ([^:]+)(?::\d+)?;(\d+)
+#     replacement: $1:$2
+#     target_label: __address__
+#   - action: labelmap
+#     regex: __meta_kubernetes_pod_label_(.+)
+#   - source_labels: [__meta_kubernetes_namespace]
+#     action: replace
+#     target_label: kubernetes_namespace
+#   - source_labels: [__meta_kubernetes_pod_name]
+#     action: replace
+#     target_label: kubernetes_pod_name

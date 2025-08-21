@@ -1,0 +1,103 @@
+# MYCE Server Kubernetes Deployment
+# This creates pods that auto-register with the hybrid ALB target group
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myce-server
+  labels:
+    app: myce-server
+    version: hybrid-demo
+spec:
+  replicas: 3  # Start with 3 pre-warmed pods (1 per node)
+  selector:
+    matchLabels:
+      app: myce-server
+  template:
+    metadata:
+      labels:
+        app: myce-server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: myce-service-account
+      imagePullSecrets:
+      - name: docker-hub-secret
+      containers:
+      - name: myce-server
+        image: juanpark80/myce-backend:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: PROFILE
+          value: "product"
+        - name: AWS_REGION  
+          value: "ap-northeast-2"
+        - name: AWS_DEFAULT_REGION
+          value: "ap-northeast-2"
+        # Fix for AWS CLI home directory issue with non-root user
+        - name: HOME
+          value: "/tmp"
+        - name: AWS_CONFIG_FILE
+          value: "/tmp/.aws/config"
+        - name: AWS_SHARED_CREDENTIALS_FILE
+          value: "/tmp/.aws/credentials"
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi" 
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 120
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 90
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      nodeSelector:
+        kubernetes.io/arch: amd64
+---
+# Service Account with IAM Role for AWS access
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: myce-service-account
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::155669502936:role/myce-eks-pod-role
+---
+# Kubernetes Service (for internal cluster communication)
+apiVersion: v1
+kind: Service
+metadata:
+  name: myce-service
+  labels:
+    app: myce-server
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: myce-server
+  type: ClusterIP
